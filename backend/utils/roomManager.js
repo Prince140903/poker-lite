@@ -33,19 +33,22 @@ class RoomManager {
    * @param {string} hostName - Name of the room creator
    * @param {string} hostSocketId - Socket ID of the host
    * @param {number} initialStake - Starting stake for the room
+   * @param {number} maxPlayers - Maximum number of players (2-8)
+   * @param {number} startingPoints - Starting points for each player
    * @returns {Object} Room object
    */
-  createRoom(hostName, hostSocketId, initialStake = 100) {
+  createRoom(hostName, hostSocketId, initialStake = 100, maxPlayers = 8, startingPoints = 1000) {
     const roomCode = this.generateRoomCode();
     
     const room = {
       code: roomCode,
       hostId: hostSocketId,
       players: [],
-      maxPlayers: 8,
+      maxPlayers: maxPlayers,
       minPlayers: 2,
       initialStake,
       currentStake: initialStake,
+      startingPoints: startingPoints,
       roundNumber: 0,
       gameStarted: false,
       gameEnded: false,
@@ -59,7 +62,7 @@ class RoomManager {
       id: this.generatePlayerId(),
       name: hostName,
       socketId: hostSocketId,
-      points: 1000, // Default starting points
+      points: startingPoints,
       isHost: true
     });
     
@@ -106,7 +109,7 @@ class RoomManager {
       id: playerData.id,
       name: playerData.name,
       socketId: playerData.socketId,
-      points: playerData.points || 1000,
+      points: playerData.points || room.startingPoints || 1000,
       cards: [],
       currentBet: 0,
       hasFolded: false,

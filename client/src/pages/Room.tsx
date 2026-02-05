@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { getSocket } from "../socket/socket";
 import { Card, GameState, ShowdownData, GameEndData } from "../types/game";
 import { GameTable } from "../components/GameTable";
 
 export const Room = () => {
-  const { id: roomCode } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const socket = getSocket();
 
@@ -352,7 +351,9 @@ export const Room = () => {
     );
   }
 
-  const myPlayer = gameState.players.find((p) => p.socketId === mySocketId);
+  // Find my player - try socketId first, then fallback to comparing by other fields
+  const myPlayer = gameState.players.find((p) => p.socketId === mySocketId) || 
+                   gameState.players.find((p) => p.id === mySocketId);
   const isSpectating = myPlayer?.isSpectator || myPlayer?.isEliminated || false;
 
   return (

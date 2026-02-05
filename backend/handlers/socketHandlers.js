@@ -15,22 +15,46 @@ module.exports = (io) => {
     /**
      * CREATE_ROOM
      * Creates a new game room
-     * Payload: { playerName, initialStake }
+     * Payload: { playerName, initialStake, maxPlayers, startingPoints }
      */
     socket.on('CREATE_ROOM', (data, callback) => {
       try {
-        const { playerName, initialStake = 100 } = data;
+        const { 
+          playerName, 
+          initialStake = 100, 
+          maxPlayers = 8,
+          startingPoints = 1000
+        } = data;
 
         if (!playerName || playerName.trim() === '') {
           return callback({ error: 'Player name is required' });
         }
 
-        const room = roomManager.createRoom(playerName, socket.id, initialStake);
+        // Validate parameters
+        if (maxPlayers < 2 || maxPlayers > 8) {
+          return callback({ error: 'Max players must be between 2 and 8' });
+        }
+
+        if (initialStake < 1) {
+          return callback({ error: 'Initial stake must be at least 1' });
+        }
+
+        if (startingPoints < initialStake) {
+          return callback({ error: 'Starting points must be at least the initial stake' });
+        }
+
+        const room = roomManager.createRoom(
+          playerName, 
+          socket.id, 
+          initialStake,
+          maxPlayers,
+          startingPoints
+        );
 
         // Join socket room
         socket.join(room.code);
 
-        console.log(`[CREATE_ROOM] ${playerName} created room ${room.code}`);
+        console.log(`[CREATE_ROOM] ${playerName} created room ${room.code} (max: ${maxPlayers}, stake: ${initialStake}, points: ${startingPoints})`);
 
         callback({
           success: true,
@@ -41,9 +65,11 @@ module.exports = (io) => {
               id: p.id,
               name: p.name,
               points: p.points,
-              isHost: p.isHost
+              isHost: p.isHost,
+              socketId: p.socketId
             })),
             initialStake: room.initialStake,
+            maxPlayers: room.maxPlayers,
             gameStarted: room.gameStarted
           }
         });
@@ -56,7 +82,8 @@ module.exports = (io) => {
               id: p.id,
               name: p.name,
               points: p.points,
-              isHost: p.isHost
+              isHost: p.isHost,
+              socketId: p.socketId
             })),
             gameStarted: room.gameStarted
           }
@@ -107,7 +134,8 @@ module.exports = (io) => {
               id: p.id,
               name: p.name,
               points: p.points,
-              isHost: p.isHost
+              isHost: p.isHost,
+              socketId: p.socketId
             })),
             gameStarted: result.gameStarted
           }
@@ -117,7 +145,8 @@ module.exports = (io) => {
         io.to(roomCode).emit('PLAYER_JOINED', {
           player: {
             id: playerId,
-            name: playerName
+            name: playerName,
+            socketId: socket.id
           },
           room: {
             code: result.code,
@@ -125,7 +154,8 @@ module.exports = (io) => {
               id: p.id,
               name: p.name,
               points: p.points,
-              isHost: p.isHost
+              isHost: p.isHost,
+              socketId: p.socketId
             })),
             gameStarted: result.gameStarted
           }
@@ -171,7 +201,8 @@ module.exports = (io) => {
                 id: p.id,
                 name: p.name,
                 points: p.points,
-                isHost: p.isHost
+                isHost: p.isHost,
+                socketId: p.socketId
               })),
               gameStarted: updatedRoom.gameStarted
             }
@@ -456,7 +487,8 @@ module.exports = (io) => {
                   id: p.id,
                   name: p.name,
                   points: p.points,
-                  isHost: p.isHost
+                  isHost: p.isHost,
+                  socketId: p.socketId
                 })),
                 gameStarted: updatedRoom.gameStarted
               }

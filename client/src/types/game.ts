@@ -7,6 +7,7 @@ export interface Card {
 export interface Player {
   id: string;
   name: string;
+  socketId?: string;
   points: number;
   currentBet: number;
   hasFolded: boolean;

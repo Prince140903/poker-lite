@@ -11,6 +11,11 @@ export const PlayerList = ({
   currentTurnSocketId,
   mySocketId,
 }: PlayerListProps) => {
+  // Find the player by comparing all fields since socketId might not be set correctly
+  const findMyPlayer = () => {
+    return players.find(p => p.socketId === mySocketId);
+  };
+
   return (
     <div
       style={{
@@ -24,7 +29,8 @@ export const PlayerList = ({
       <h3 style={{ margin: "0 0 15px 0", color: "#2c3e50" }}>Players</h3>
       {players.map((player) => {
         const isMyTurn = player.socketId === currentTurnSocketId;
-        const isMe = player.socketId === mySocketId;
+        const myPlayer = findMyPlayer();
+        const isMe = player.id === myPlayer?.id || player.socketId === mySocketId;
 
         return (
           <div
