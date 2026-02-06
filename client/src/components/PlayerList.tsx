@@ -13,7 +13,7 @@ export const PlayerList = ({
 }: PlayerListProps) => {
   // Find the player by comparing all fields since socketId might not be set correctly
   const findMyPlayer = () => {
-    return players.find(p => p.socketId === mySocketId);
+    return players.find((p) => p.socketId === mySocketId);
   };
 
   return (
@@ -30,7 +30,8 @@ export const PlayerList = ({
       {players.map((player) => {
         const isMyTurn = player.socketId === currentTurnSocketId;
         const myPlayer = findMyPlayer();
-        const isMe = player.id === myPlayer?.id || player.socketId === mySocketId;
+        const isMe =
+          player.id === myPlayer?.id || player.socketId === mySocketId;
 
         return (
           <div

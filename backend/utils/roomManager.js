@@ -15,16 +15,18 @@ class RoomManager {
    * @returns {string} Room code
    */
   generateRoomCode() {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let code;
-    
+
     do {
-      code = '';
+      code = "";
       for (let i = 0; i < 6; i++) {
-        code += characters.charAt(Math.floor(Math.random() * characters.length));
+        code += characters.charAt(
+          Math.floor(Math.random() * characters.length),
+        );
       }
     } while (this.rooms.has(code)); // Ensure uniqueness
-    
+
     return code;
   }
 
@@ -37,9 +39,15 @@ class RoomManager {
    * @param {number} startingPoints - Starting points for each player
    * @returns {Object} Room object
    */
-  createRoom(hostName, hostSocketId, initialStake = 100, maxPlayers = 8, startingPoints = 1000) {
+  createRoom(
+    hostName,
+    hostSocketId,
+    initialStake = 100,
+    maxPlayers = 8,
+    startingPoints = 1000,
+  ) {
     const roomCode = this.generateRoomCode();
-    
+
     const room = {
       code: roomCode,
       hostId: hostSocketId,
@@ -52,20 +60,20 @@ class RoomManager {
       roundNumber: 0,
       gameStarted: false,
       gameEnded: false,
-      createdAt: Date.now()
+      createdAt: Date.now(),
     };
-    
+
     this.rooms.set(roomCode, room);
-    
+
     // Add host as first player
     this.addPlayerToRoom(roomCode, {
       id: this.generatePlayerId(),
       name: hostName,
       socketId: hostSocketId,
       points: startingPoints,
-      isHost: true
+      isHost: true,
     });
-    
+
     return room;
   }
 
@@ -85,25 +93,27 @@ class RoomManager {
    */
   addPlayerToRoom(roomCode, playerData) {
     const room = this.rooms.get(roomCode);
-    
+
     if (!room) {
-      return { error: 'Room not found' };
+      return { error: "Room not found" };
     }
-    
+
     if (room.gameStarted) {
-      return { error: 'Game already started' };
+      return { error: "Game already started" };
     }
-    
+
     if (room.players.length >= room.maxPlayers) {
-      return { error: 'Room is full' };
+      return { error: "Room is full" };
     }
-    
+
     // Check if player already in room
-    const existingPlayer = room.players.find(p => p.socketId === playerData.socketId);
+    const existingPlayer = room.players.find(
+      (p) => p.socketId === playerData.socketId,
+    );
     if (existingPlayer) {
-      return { error: 'Already in room' };
+      return { error: "Already in room" };
     }
-    
+
     // Create player object with game state
     const player = {
       id: playerData.id,
@@ -116,11 +126,11 @@ class RoomManager {
       isAllIn: false,
       isEliminated: false,
       isSpectator: false,
-      isHost: playerData.isHost || false
+      isHost: playerData.isHost || false,
     };
-    
+
     room.players.push(player);
-    
+
     return room;
   }
 
@@ -132,28 +142,28 @@ class RoomManager {
    */
   removePlayerFromRoom(roomCode, socketId) {
     const room = this.rooms.get(roomCode);
-    
+
     if (!room) return null;
-    
-    const playerIndex = room.players.findIndex(p => p.socketId === socketId);
-    
+
+    const playerIndex = room.players.findIndex((p) => p.socketId === socketId);
+
     if (playerIndex === -1) return null;
-    
+
     const removedPlayer = room.players[playerIndex];
     room.players.splice(playerIndex, 1);
-    
+
     // If host left, assign new host
     if (removedPlayer.isHost && room.players.length > 0) {
       room.players[0].isHost = true;
       room.hostId = room.players[0].socketId;
     }
-    
+
     // Delete room if empty
     if (room.players.length === 0) {
       this.rooms.delete(roomCode);
       return null;
     }
-    
+
     return room;
   }
 
@@ -173,7 +183,7 @@ class RoomManager {
    */
   getRoomBySocketId(socketId) {
     for (const [code, room] of this.rooms.entries()) {
-      if (room.players.some(p => p.socketId === socketId)) {
+      if (room.players.some((p) => p.socketId === socketId)) {
         return room;
       }
     }
@@ -189,8 +199,8 @@ class RoomManager {
   getPlayer(roomCode, socketId) {
     const room = this.rooms.get(roomCode);
     if (!room) return null;
-    
-    return room.players.find(p => p.socketId === socketId) || null;
+
+    return room.players.find((p) => p.socketId === socketId) || null;
   }
 
   /**
@@ -200,11 +210,11 @@ class RoomManager {
    */
   canStartGame(roomCode) {
     const room = this.rooms.get(roomCode);
-    
+
     if (!room) return false;
     if (room.gameStarted) return false;
     if (room.players.length < room.minPlayers) return false;
-    
+
     return true;
   }
 
@@ -216,8 +226,8 @@ class RoomManager {
   getActivePlayers(roomCode) {
     const room = this.rooms.get(roomCode);
     if (!room) return [];
-    
-    return room.players.filter(p => !p.isEliminated && !p.isSpectator);
+
+    return room.players.filter((p) => !p.isEliminated && !p.isSpectator);
   }
 
   /**
@@ -228,11 +238,9 @@ class RoomManager {
   getPlayersInRound(roomCode) {
     const room = this.rooms.get(roomCode);
     if (!room) return [];
-    
-    return room.players.filter(p => 
-      !p.isEliminated && 
-      !p.isSpectator && 
-      !p.hasFolded
+
+    return room.players.filter(
+      (p) => !p.isEliminated && !p.isSpectator && !p.hasFolded,
     );
   }
 }

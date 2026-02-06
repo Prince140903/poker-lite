@@ -16,7 +16,10 @@ export const Room = () => {
   const [gameEndData, setGameEndData] = useState<GameEndData | null>(null);
   const [error, setError] = useState<string>("");
   const [notification, setNotification] = useState<string>("");
-  const [turnTimer, setTurnTimer] = useState<{ playerId: string; timeRemaining: number } | null>(null);
+  const [turnTimer, setTurnTimer] = useState<{
+    playerId: string;
+    timeRemaining: number;
+  } | null>(null);
 
   useEffect(() => {
     // Set socket ID immediately if connected
@@ -31,7 +34,7 @@ export const Room = () => {
       console.log("Initializing room with data:", {
         room: initialRoom,
         currentSocketId: socket.id,
-        socketConnected: socket.connected
+        socketConnected: socket.connected,
       });
       setGameState({
         roomCode: initialRoom.code,
@@ -200,9 +203,12 @@ export const Room = () => {
       setGameEndData(data);
     });
 
-    socket.on("TURN_TIMER_UPDATE", (data: { playerId: string; timeRemaining: number }) => {
-      setTurnTimer(data);
-    });
+    socket.on(
+      "TURN_TIMER_UPDATE",
+      (data: { playerId: string; timeRemaining: number }) => {
+        setTurnTimer(data);
+      },
+    );
 
     socket.emit("GET_GAME_STATE", {}, (response: any) => {
       if (response.success && response.state) {
@@ -404,27 +410,30 @@ export const Room = () => {
   }
 
   // Find my player - try socketId first, then fallback to comparing by other fields
-  const myPlayer = gameState.players.find((p) => p.socketId === mySocketId) || 
-                   gameState.players.find((p) => p.id === mySocketId);
+  const myPlayer =
+    gameState.players.find((p) => p.socketId === mySocketId) ||
+    gameState.players.find((p) => p.id === mySocketId);
   const isSpectating = myPlayer?.isSpectator || myPlayer?.isEliminated || false;
 
   // Debug logging
   console.log("Player identification:", {
     mySocketId,
-    playersWithSocketIds: gameState.players.map(p => ({ 
-      name: p.name, 
-      socketId: p.socketId, 
+    playersWithSocketIds: gameState.players.map((p) => ({
+      name: p.name,
+      socketId: p.socketId,
       id: p.id,
-      isHost: p.isHost 
+      isHost: p.isHost,
     })),
-    myPlayer: myPlayer ? {
-      name: myPlayer.name,
-      socketId: myPlayer.socketId,
-      id: myPlayer.id,
-      isHost: myPlayer.isHost
-    } : null,
+    myPlayer: myPlayer
+      ? {
+          name: myPlayer.name,
+          socketId: myPlayer.socketId,
+          id: myPlayer.id,
+          isHost: myPlayer.isHost,
+        }
+      : null,
     isHost: myPlayer?.isHost,
-    showStartButton: !gameState.gameStarted && myPlayer?.isHost
+    showStartButton: !gameState.gameStarted && myPlayer?.isHost,
   });
 
   return (

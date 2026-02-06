@@ -75,7 +75,7 @@ export const Home = () => {
         } else if (response.success) {
           // Pass the initial room state through navigation
           navigate(`/room/${response.roomCode}`, {
-            state: { initialRoom: response.room }
+            state: { initialRoom: response.room },
           });
         }
       },
@@ -107,7 +107,7 @@ export const Home = () => {
         } else if (response.success) {
           // Pass the initial room state through navigation
           navigate(`/room/${response.roomCode}`, {
-            state: { initialRoom: response.room }
+            state: { initialRoom: response.room },
           });
         }
       },

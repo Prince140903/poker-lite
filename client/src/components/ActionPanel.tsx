@@ -21,48 +21,64 @@ export const ActionPanel = ({
   const socket = getSocket();
 
   const handleCall = () => {
-    socket.emit("PLAYER_ACTION", {
-      action: "call",
-    }, (response: any) => {
-      if (response?.error) {
-        console.error("Call error:", response.error);
-      }
-    });
+    socket.emit(
+      "PLAYER_ACTION",
+      {
+        action: "call",
+      },
+      (response: any) => {
+        if (response?.error) {
+          console.error("Call error:", response.error);
+        }
+      },
+    );
   };
 
   const handleRaise = () => {
     const amount = parseInt(raiseAmount);
     if (isNaN(amount)) return;
 
-    socket.emit("PLAYER_ACTION", {
-      action: "raise",
-      amount,
-    }, (response: any) => {
-      if (response?.error) {
-        console.error("Raise error:", response.error);
-      }
-    });
+    socket.emit(
+      "PLAYER_ACTION",
+      {
+        action: "raise",
+        amount,
+      },
+      (response: any) => {
+        if (response?.error) {
+          console.error("Raise error:", response.error);
+        }
+      },
+    );
     setRaiseAmount("");
   };
 
   const handleFold = () => {
-    socket.emit("PLAYER_ACTION", {
-      action: "fold",
-    }, (response: any) => {
-      if (response?.error) {
-        console.error("Fold error:", response.error);
-      }
-    });
+    socket.emit(
+      "PLAYER_ACTION",
+      {
+        action: "fold",
+      },
+      (response: any) => {
+        if (response?.error) {
+          console.error("Fold error:", response.error);
+        }
+      },
+    );
   };
 
   const handleAllIn = () => {
-    socket.emit("PLAYER_ACTION", {
-      action: "all-in",
-    }, (response: any) => {
-      if (response?.error) {
-        console.error("All-in error:", response.error);
-      }
-    });
+    socket.emit(
+      "PLAYER_ACTION",
+      {
+        action: "all-in",
+      },
+      (response: any) => {
+        if (response?.error) {
+          console.error("All-in error:", response.error);
+        }
+      },
+    );
   };
 
   if (!canAct) {
@@ -98,7 +114,15 @@ export const ActionPanel = ({
         maxWidth: "min(400px, 90vw)",
       }}
     >
-      <h3 style={{ margin: "0 0 15px 0", color: "#2c3e50", fontSize: "clamp(14px, 2.5vw, 18px)" }}>Your Turn</h3>
+      <h3
+        style={{
+          margin: "0 0 15px 0",
+          color: "#2c3e50",
+          fontSize: "clamp(14px, 2.5vw, 18px)",
+        }}
+      >
+        Your Turn
+      </h3>
 
       <div
         style={{
@@ -157,7 +181,8 @@ export const ActionPanel = ({
                 cursor: "pointer",
                 fontSize: "clamp(14px, 2vw, 16px)",
                 fontWeight: "bold",
-                opacity: !raiseAmount || parseInt(raiseAmount) < minRaise ? 0.6 : 1,
+                opacity:
+                  !raiseAmount || parseInt(raiseAmount) < minRaise ? 0.6 : 1,
                 minHeight: "44px",
               }}
             >
