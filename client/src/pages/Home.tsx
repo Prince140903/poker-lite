@@ -73,7 +73,10 @@ export const Home = () => {
         if (response.error) {
           setError(response.error);
         } else if (response.success) {
-          navigate(`/room/${response.roomCode}`);
+          // Pass the initial room state through navigation
+          navigate(`/room/${response.roomCode}`, {
+            state: { initialRoom: response.room }
+          });
         }
       },
     );
@@ -102,7 +105,10 @@ export const Home = () => {
         if (response.error) {
           setError(response.error);
         } else if (response.success) {
-          navigate(`/room/${response.roomCode}`);
+          // Pass the initial room state through navigation
+          navigate(`/room/${response.roomCode}`, {
+            state: { initialRoom: response.room }
+          });
         }
       },
     );

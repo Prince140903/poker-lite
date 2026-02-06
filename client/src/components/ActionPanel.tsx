@@ -16,35 +16,31 @@ export const ActionPanel = ({
   myCurrentBet,
   myPoints,
 }: ActionPanelProps) => {
-  const [betAmount, setBetAmount] = useState<string>("");
   const [raiseAmount, setRaiseAmount] = useState<string>("");
 
   const socket = getSocket();
 
-  const handleBet = () => {
-    const amount = parseInt(betAmount);
-    if (isNaN(amount) || amount < currentStake) return;
-
-    socket.emit("PLAYER_ACTION", {
-      action: "bet",
-      amount,
-    });
-    setBetAmount("");
-  };
-
   const handleCall = () => {
     socket.emit("PLAYER_ACTION", {
       action: "call",
+    }, (response: any) => {
+      if (response?.error) {
+        console.error("Call error:", response.error);
+      }
     });
   };
 
   const handleRaise = () => {
     const amount = parseInt(raiseAmount);
-    if (isNaN(amount) || amount <= highestBet) return;
+    if (isNaN(amount)) return;
 
     socket.emit("PLAYER_ACTION", {
       action: "raise",
       amount,
+    }, (response: any) => {
+      if (response?.error) {
+        console.error("Raise error:", response.error);
+      }
     });
     setRaiseAmount("");
   };
@@ -52,12 +48,20 @@ export const ActionPanel = ({
   const handleFold = () => {
     socket.emit("PLAYER_ACTION", {
       action: "fold",
+    }, (response: any) => {
+      if (response?.error) {
+        console.error("Fold error:", response.error);
+      }
     });
   };
 
   const handleAllIn = () => {
     socket.emit("PLAYER_ACTION", {
       action: "all-in",
+    }, (response: any) => {
+      if (response?.error) {
+        console.error("All-in error:", response.error);
+      }
     });
   };
 
@@ -65,12 +69,13 @@ export const ActionPanel = ({
     return (
       <div
         style={{
-          padding: "20px",
+          padding: "clamp(15px, 2vw, 20px)",
           border: "1px solid #bdc3c7",
           borderRadius: "8px",
           backgroundColor: "#ecf0f1",
           textAlign: "center",
           color: "#7f8c8d",
+          fontSize: "clamp(12px, 2vw, 14px)",
         }}
       >
         Waiting for your turn...
@@ -79,20 +84,21 @@ export const ActionPanel = ({
   }
 
   const callAmount = highestBet - myCurrentBet;
-  const canCall = callAmount > 0 && myPoints >= callAmount;
-  const canBet = highestBet === 0 && myPoints >= currentStake;
-  const canRaise = highestBet > 0 && myPoints > callAmount;
+  const canCall = highestBet > 0 && myPoints >= callAmount;
+  const canRaise = myPoints > highestBet;
+  const minRaise = highestBet > 0 ? highestBet + currentStake : currentStake;
 
   return (
     <div
       style={{
-        padding: "20px",
+        padding: "clamp(15px, 2vw, 20px)",
         border: "2px solid #3498db",
         borderRadius: "8px",
         backgroundColor: "#fff",
+        maxWidth: "min(400px, 90vw)",
       }}
     >
-      <h3 style={{ margin: "0 0 15px 0", color: "#2c3e50" }}>Your Turn</h3>
+      <h3 style={{ margin: "0 0 15px 0", color: "#2c3e50", fontSize: "clamp(14px, 2.5vw, 18px)" }}>Your Turn</h3>
 
       <div
         style={{
@@ -101,87 +107,58 @@ export const ActionPanel = ({
           gap: "10px",
         }}
       >
-        {canBet && (
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <input
-              type="number"
-              value={betAmount}
-              onChange={(e) => setBetAmount(e.target.value)}
-              placeholder={`Min: ${currentStake}`}
-              min={currentStake}
-              style={{
-                flex: 1,
-                padding: "10px",
-                borderRadius: "4px",
-                border: "1px solid #bdc3c7",
-                fontSize: "14px",
-              }}
-            />
-            <button
-              onClick={handleBet}
-              disabled={!betAmount || parseInt(betAmount) < currentStake}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#27ae60",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "bold",
-              }}
-            >
-              Bet
-            </button>
-          </div>
-        )}
-
+        {/* Call Button - Match the current highest bet */}
         {canCall && (
           <button
             onClick={handleCall}
             style={{
-              padding: "10px 20px",
+              padding: "clamp(10px, 2vw, 12px) clamp(15px, 3vw, 20px)",
               backgroundColor: "#3498db",
               color: "#fff",
               border: "none",
-              borderRadius: "4px",
+              borderRadius: "6px",
               cursor: "pointer",
-              fontSize: "14px",
+              fontSize: "clamp(14px, 2vw, 16px)",
               fontWeight: "bold",
+              minHeight: "44px",
             }}
           >
-            Call ({callAmount})
+            Call ({callAmount} points)
           </button>
         )}
 
+        {/* Raise Button - Increase the bet */}
         {canRaise && (
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <input
               type="number"
               value={raiseAmount}
               onChange={(e) => setRaiseAmount(e.target.value)}
-              placeholder={`Min: ${highestBet + 1}`}
-              min={highestBet + 1}
+              placeholder={`Min: ${minRaise}`}
+              min={minRaise}
               style={{
                 flex: 1,
-                padding: "10px",
+                padding: "clamp(8px, 1.5vw, 10px)",
                 borderRadius: "4px",
                 border: "1px solid #bdc3c7",
-                fontSize: "14px",
+                fontSize: "clamp(12px, 2vw, 14px)",
+                minHeight: "44px",
               }}
             />
             <button
               onClick={handleRaise}
-              disabled={!raiseAmount || parseInt(raiseAmount) <= highestBet}
+              disabled={!raiseAmount || parseInt(raiseAmount) < minRaise}
               style={{
-                padding: "10px 20px",
+                padding: "clamp(10px, 2vw, 12px) clamp(15px, 3vw, 20px)",
                 backgroundColor: "#e67e22",
                 color: "#fff",
                 border: "none",
-                borderRadius: "4px",
+                borderRadius: "6px",
                 cursor: "pointer",
-                fontSize: "14px",
+                fontSize: "clamp(14px, 2vw, 16px)",
                 fontWeight: "bold",
+                opacity: !raiseAmount || parseInt(raiseAmount) < minRaise ? 0.6 : 1,
+                minHeight: "44px",
               }}
             >
               Raise
@@ -189,34 +166,38 @@ export const ActionPanel = ({
           </div>
         )}
 
+        {/* Fold Button */}
         <button
           onClick={handleFold}
           style={{
-            padding: "10px 20px",
-            backgroundColor: "#95a5a6",
+            padding: "clamp(10px, 2vw, 12px) clamp(15px, 3vw, 20px)",
+            backgroundColor: "#e74c3c",
             color: "#fff",
             border: "none",
-            borderRadius: "4px",
+            borderRadius: "6px",
             cursor: "pointer",
-            fontSize: "14px",
+            fontSize: "clamp(14px, 2vw, 16px)",
             fontWeight: "bold",
+            minHeight: "44px",
           }}
         >
           Fold
         </button>
 
+        {/* All-In Button */}
         {myPoints > 0 && (
           <button
             onClick={handleAllIn}
             style={{
-              padding: "10px 20px",
+              padding: "clamp(8px, 1.5vw, 10px) clamp(15px, 3vw, 20px)",
               backgroundColor: "#e74c3c",
               color: "#fff",
               border: "none",
               borderRadius: "4px",
               cursor: "pointer",
-              fontSize: "14px",
+              fontSize: "clamp(12px, 2vw, 14px)",
               fontWeight: "bold",
+              minHeight: "44px",
             }}
           >
             All-in ({myPoints})

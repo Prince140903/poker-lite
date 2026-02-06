@@ -16,6 +16,7 @@ export interface Player {
   isSpectator: boolean;
   isHost: boolean;
   hasCards: boolean;
+  cards?: Card[];
 }
 
 export interface GameState {

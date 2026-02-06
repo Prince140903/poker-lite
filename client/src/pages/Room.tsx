@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getSocket } from "../socket/socket";
 import { Card, GameState, ShowdownData, GameEndData } from "../types/game";
 import { GameTable } from "../components/GameTable";
 
 export const Room = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const socket = getSocket();
 
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -14,17 +15,45 @@ export const Room = () => {
   const [showdownData, setShowdownData] = useState<ShowdownData | null>(null);
   const [gameEndData, setGameEndData] = useState<GameEndData | null>(null);
   const [error, setError] = useState<string>("");
+  const [notification, setNotification] = useState<string>("");
+  const [turnTimer, setTurnTimer] = useState<{ playerId: string; timeRemaining: number } | null>(null);
 
   useEffect(() => {
-    if (socket.connected) {
-      setMySocketId(socket.id || "");
+    // Set socket ID immediately if connected
+    if (socket.connected && socket.id) {
+      console.log("Setting initial socket ID:", socket.id);
+      setMySocketId(socket.id);
+    }
+
+    // Initialize with room data from navigation state (if coming from CREATE_ROOM or JOIN_ROOM)
+    const initialRoom = (location.state as any)?.initialRoom;
+    if (initialRoom) {
+      console.log("Initializing room with data:", {
+        room: initialRoom,
+        currentSocketId: socket.id,
+        socketConnected: socket.connected
+      });
+      setGameState({
+        roomCode: initialRoom.code,
+        players: initialRoom.players,
+        gameStarted: initialRoom.gameStarted || false,
+        gameEnded: false,
+        roundNumber: 0,
+        currentStake: initialRoom.initialStake || 0,
+        pot: 0,
+        highestBet: 0,
+        currentTurn: null,
+        currentTurnSocketId: null,
+      });
     }
 
     socket.on("connect", () => {
+      console.log("Socket connected:", socket.id);
       setMySocketId(socket.id || "");
     });
 
     socket.on("ROOM_UPDATED", (data: any) => {
+      console.log("ROOM_UPDATED event received:", data);
       if (data.room) {
         setGameState((prev) => ({
           ...prev,
@@ -43,6 +72,12 @@ export const Room = () => {
     });
 
     socket.on("PLAYER_JOINED", (data: any) => {
+      console.log("PLAYER_JOINED event received:", data);
+      if (data.player) {
+        console.log(`👋 ${data.player.name} joined the room`);
+        setNotification(`${data.player.name} joined the room`);
+        setTimeout(() => setNotification(""), 3000);
+      }
       if (data.room) {
         setGameState((prev) => ({
           ...prev,
@@ -61,6 +96,12 @@ export const Room = () => {
     });
 
     socket.on("PLAYER_LEFT", (data: any) => {
+      console.log("PLAYER_LEFT event received:", data);
+      if (data.playerName) {
+        console.log(`👋 ${data.playerName} left the room`);
+        setNotification(`${data.playerName} left the room`);
+        setTimeout(() => setNotification(""), 3000);
+      }
       if (data.room) {
         setGameState((prev) => ({
           ...prev,
@@ -79,6 +120,12 @@ export const Room = () => {
     });
 
     socket.on("PLAYER_DISCONNECTED", (data: any) => {
+      console.log("PLAYER_DISCONNECTED event received:", data);
+      if (data.playerName) {
+        console.log(`⚠️ ${data.playerName} disconnected`);
+        setNotification(`${data.playerName} disconnected`);
+        setTimeout(() => setNotification(""), 3000);
+      }
       if (data.room) {
         setGameState((prev) => ({
           ...prev,
@@ -153,6 +200,10 @@ export const Room = () => {
       setGameEndData(data);
     });
 
+    socket.on("TURN_TIMER_UPDATE", (data: { playerId: string; timeRemaining: number }) => {
+      setTurnTimer(data);
+    });
+
     socket.emit("GET_GAME_STATE", {}, (response: any) => {
       if (response.success && response.state) {
         setGameState(response.state);
@@ -177,6 +228,7 @@ export const Room = () => {
       socket.off("PLAYER_ACTION_RESULT");
       socket.off("SHOWDOWN");
       socket.off("GAME_END");
+      socket.off("TURN_TIMER_UPDATE");
     };
   }, [socket]);
 
@@ -356,8 +408,48 @@ export const Room = () => {
                    gameState.players.find((p) => p.id === mySocketId);
   const isSpectating = myPlayer?.isSpectator || myPlayer?.isEliminated || false;
 
+  // Debug logging
+  console.log("Player identification:", {
+    mySocketId,
+    playersWithSocketIds: gameState.players.map(p => ({ 
+      name: p.name, 
+      socketId: p.socketId, 
+      id: p.id,
+      isHost: p.isHost 
+    })),
+    myPlayer: myPlayer ? {
+      name: myPlayer.name,
+      socketId: myPlayer.socketId,
+      id: myPlayer.id,
+      isHost: myPlayer.isHost
+    } : null,
+    isHost: myPlayer?.isHost,
+    showStartButton: !gameState.gameStarted && myPlayer?.isHost
+  });
+
   return (
     <div>
+      {/* Notification Banner */}
+      {notification && (
+        <div
+          style={{
+            position: "fixed",
+            top: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "#3498db",
+            color: "#fff",
+            padding: "12px 24px",
+            borderRadius: "8px",
+            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+            zIndex: 2000,
+            animation: "slideDown 0.3s ease-out",
+          }}
+        >
+          {notification}
+        </div>
+      )}
+
       {!gameState.gameStarted && (
         <div
           style={{
@@ -431,6 +523,7 @@ export const Room = () => {
             isSpectating={isSpectating}
             showdownData={showdownData}
             onStartNewRound={handleStartNewRound}
+            turnTimer={turnTimer}
           />
         ) : (
           <div

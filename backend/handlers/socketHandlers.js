@@ -8,6 +8,89 @@ const roomManager = require('../utils/roomManager');
 const gameStateManager = require('../utils/gameStateManager');
 const turnManager = require('../utils/turnManager');
 
+// Store turn timers
+const turnTimers = new Map(); // roomCode -> { timeoutId, intervalId, startTime, playerId }
+const TURN_TIMEOUT = 30000; // 30 seconds
+
+/**
+ * Clear and stop turn timer for a room
+ */
+const clearTurnTimer = (roomCode) => {
+  const timerData = turnTimers.get(roomCode);
+  if (timerData) {
+    if (timerData.timeoutId) clearTimeout(timerData.timeoutId);
+    if (timerData.intervalId) clearInterval(timerData.intervalId);
+    turnTimers.delete(roomCode);
+    console.log(`[TIMER] Cleared timer for room ${roomCode}`);
+  }
+};
+
+/**
+ * Start turn timer for current player
+ */
+const startTurnTimer = (roomCode, playerId, io) => {
+  // Clear any existing timer
+  clearTurnTimer(roomCode);
+
+  const startTime = Date.now();
+  
+  // Send initial timer update
+  io.to(roomCode).emit('TURN_TIMER_UPDATE', {
+    playerId,
+    timeRemaining: 30
+  });
+
+  // Update timer every second
+  const intervalId = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const remaining = Math.ceil((TURN_TIMEOUT - elapsed) / 1000);
+    
+    if (remaining > 0) {
+      io.to(roomCode).emit('TURN_TIMER_UPDATE', {
+        playerId,
+        timeRemaining: remaining
+      });
+    }
+  }, 1000);
+
+  // Auto-fold when timer expires
+  const timeoutId = setTimeout(() => {
+    clearInterval(intervalId);
+    
+    const room = roomManager.getRoom(roomCode);
+    if (room && room.gameStarted && !room.gameEnded) {
+      const player = room.players.find(p => p.id === playerId);
+      
+      if (player && !player.hasFolded && !player.isEliminated) {
+        console.log(`[TIMER] Auto-folding ${player.name} in room ${roomCode}`);
+        
+        // Process automatic fold
+        const result = gameStateManager.processPlayerAction(roomCode, player.socketId, 'fold', 0);
+        
+        // Notify all players
+        io.to(roomCode).emit('PLAYER_ACTION_RESULT', {
+          playerId: player.id,
+          playerName: player.name,
+          action: 'fold',
+          amount: 0,
+          autoFold: true,
+          pot: result.pot,
+          currentTurnIndex: result.currentTurnIndex
+        });
+
+        // Update game state
+        const state = gameStateManager.getGameState(roomCode);
+        io.to(roomCode).emit('GAME_STATE_UPDATE', state);
+      }
+    }
+    
+    turnTimers.delete(roomCode);
+  }, TURN_TIMEOUT);
+
+  turnTimers.set(roomCode, { timeoutId, intervalId, startTime, playerId });
+  console.log(`[TIMER] Started 30s timer for player ${playerId} in room ${roomCode}`);
+};
+
 module.exports = (io) => {
   io.on('connection', (socket) => {
     console.log(`[CONNECTION] Player connected: ${socket.id}`);
@@ -182,6 +265,9 @@ module.exports = (io) => {
         const roomCode = room.code;
         const player = roomManager.getPlayer(roomCode, socket.id);
 
+        // Clear turn timer if this room had one
+        clearTurnTimer(roomCode);
+
         const updatedRoom = roomManager.removePlayerFromRoom(roomCode, socket.id);
 
         socket.leave(roomCode);
@@ -267,6 +353,20 @@ module.exports = (io) => {
         const state = gameStateManager.getGameState(room.code);
         io.to(room.code).emit('GAME_STATE_UPDATE', state);
 
+        // Check if round should end immediately (e.g., all players all-in)
+        const roundEndCheck = gameStateManager.checkRoundEnd(room.code);
+        if (roundEndCheck.shouldEnd) {
+          console.log(`[START_GAME] Round ending immediately: ${roundEndCheck.reason}`);
+          const showdownResult = gameStateManager.endRound(room.code);
+          io.to(room.code).emit('SHOWDOWN', showdownResult);
+        } else {
+          // Start timer for current player's turn
+          const currentPlayer = room.players[room.currentTurnIndex];
+          if (currentPlayer && !currentPlayer.isEliminated && !currentPlayer.hasFolded) {
+            startTurnTimer(room.code, currentPlayer.id, io);
+          }
+        }
+
       } catch (error) {
         console.error('[START_GAME] Error:', error);
         callback({ error: 'Failed to start game' });
@@ -285,32 +385,60 @@ module.exports = (io) => {
         const room = roomManager.getRoomBySocketId(socket.id);
 
         if (!room) {
-          return callback({ error: 'Not in a room' });
+          if (callback) return callback({ error: 'Not in a room' });
+          return;
         }
 
         if (!room.gameStarted || room.gameEnded) {
-          return callback({ error: 'Game not in progress' });
+          if (callback) return callback({ error: 'Game not in progress' });
+          return;
         }
 
         // Validate action
         const validation = turnManager.validateAction(room.code, socket.id, action, amount);
 
         if (!validation.valid) {
-          return callback({ error: validation.error });
+          if (callback) return callback({ error: validation.error });
+          return;
         }
 
         // Process action
         const result = gameStateManager.processPlayerAction(room.code, socket.id, action, amount);
 
         if (result.error) {
-          return callback({ error: result.error });
+          if (callback) return callback({ error: result.error });
+          return;
         }
 
         const player = roomManager.getPlayer(room.code, socket.id);
 
         console.log(`[PLAYER_ACTION] ${player.name} performed ${action} in room ${room.code}`);
 
-        callback({ success: true, result });
+        // Clear timer for this player
+        clearTurnTimer(room.code);
+
+        // Check if action caused immediate round end (e.g., fold leaving one player)
+        if (result.roundEnded) {
+          console.log(`[PLAYER_ACTION] Round ended immediately after ${action}`);
+          
+          if (callback) callback({ success: true, result });
+
+          // Broadcast the action first
+          io.to(room.code).emit('PLAYER_ACTION_RESULT', {
+            playerId: player.id,
+            playerName: player.name,
+            action,
+            amount,
+            pot: result.pot || room.pot,
+            currentTurnIndex: result.currentTurnIndex
+          });
+
+          // Then broadcast showdown results
+          io.to(room.code).emit('SHOWDOWN', result);
+          return;
+        }
+
+        if (callback) callback({ success: true, result });
 
         // Broadcast action to all players
         io.to(room.code).emit('PLAYER_ACTION_RESULT', {
@@ -326,9 +454,20 @@ module.exports = (io) => {
         const state = gameStateManager.getGameState(room.code);
         io.to(room.code).emit('GAME_STATE_UPDATE', state);
 
+        // Start timer for next player if game continues
+        if (!room.gameEnded && room.gameStarted) {
+          const roundEndCheck = gameStateManager.checkRoundEnd(room.code);
+          if (!roundEndCheck.shouldEnd) {
+            const currentPlayer = room.players[room.currentTurnIndex];
+            if (currentPlayer && !currentPlayer.isEliminated && !currentPlayer.hasFolded) {
+              startTurnTimer(room.code, currentPlayer.id, io);
+            }
+          }
+        }
+
       } catch (error) {
         console.error('[PLAYER_ACTION] Error:', error);
-        callback({ error: 'Failed to process action' });
+        if (callback) callback({ error: 'Failed to process action' });
       }
     });
 
@@ -425,6 +564,20 @@ module.exports = (io) => {
         const state = gameStateManager.getGameState(room.code);
         io.to(room.code).emit('GAME_STATE_UPDATE', state);
 
+        // Check if round should end immediately (e.g., all players all-in)
+        const roundEndCheck = gameStateManager.checkRoundEnd(room.code);
+        if (roundEndCheck.shouldEnd) {
+          console.log(`[NEW_ROUND] Round ending immediately: ${roundEndCheck.reason}`);
+          const showdownResult = gameStateManager.endRound(room.code);
+          io.to(room.code).emit('SHOWDOWN', showdownResult);
+        } else {
+          // Start timer for current player's turn
+          const currentPlayer = room.players[room.currentTurnIndex];
+          if (currentPlayer && !currentPlayer.isEliminated && !currentPlayer.hasFolded) {
+            startTurnTimer(room.code, currentPlayer.id, io);
+          }
+        }
+
       } catch (error) {
         console.error('[START_NEW_ROUND] Error:', error);
         callback({ error: 'Failed to start new round' });
@@ -470,6 +623,9 @@ module.exports = (io) => {
       if (room) {
         const player = roomManager.getPlayer(room.code, socket.id);
         const roomCode = room.code;
+
+        // Clear turn timer if this room had one
+        clearTurnTimer(roomCode);
 
         const updatedRoom = roomManager.removePlayerFromRoom(roomCode, socket.id);
 

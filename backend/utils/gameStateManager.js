@@ -62,6 +62,7 @@ class GameStateManager {
       player.currentBet = 0;
       player.hasFolded = false;
       player.isAllIn = false;
+      player.hasActed = false; // Track if player has taken their turn
     });
     
     // Check for eliminated players (points = 0)
@@ -100,6 +101,28 @@ class GameStateManager {
     });
     
     room.deck = remainingDeck;
+    
+    // Force initial stake bet from all players (compulsory bet)
+    remainingActivePlayers.forEach(player => {
+      const betAmount = Math.min(room.currentStake, player.points);
+      player.currentBet = betAmount;
+      player.points -= betAmount;
+      room.pot += betAmount;
+      
+      console.log(`[INITIAL_BET] ${player.name} bets ${betAmount}, remaining points: ${player.points}, pot now: ${room.pot}`);
+      
+      // If player can't afford stake, they're all-in
+      if (player.points === 0) {
+        player.isAllIn = true;
+        console.log(`[ALL_IN] ${player.name} is all-in`);
+      }
+    });
+    
+    // Set highest bet to the stake (or max bet if someone went all-in with less)
+    const actualHighestBet = Math.max(...remainingActivePlayers.map(p => p.currentBet));
+    room.highestBet = actualHighestBet;
+    
+    console.log(`[ROUND_START] Round ${room.roundNumber} initialized. Pot: ${room.pot}, Highest Bet: ${room.highestBet}, Active Players: ${remainingActivePlayers.length}`);
     
     return {
       roomCode,
@@ -149,7 +172,7 @@ class GameStateManager {
     
     switch (action) {
       case 'fold':
-        actionResult = this.handleFold(room, player);
+        actionResult = this.handleFold(roomCode, room, player);
         break;
         
       case 'call':
@@ -176,13 +199,20 @@ class GameStateManager {
       return actionResult;
     }
     
+    // Check for immediate win (only one player left after fold)
+    if (actionResult.immediateWin) {
+      const showdownData = this.endRound(roomCode, actionResult.winner);
+      return { ...showdownData, roundEnded: true };
+    }
+
     // Check if round should end
     const roundEndCheck = this.checkRoundEnd(roomCode);
     
     if (roundEndCheck.shouldEnd) {
-      return this.endRound(roomCode);
+      const showdownData = this.endRound(roomCode);
+      return { ...showdownData, roundEnded: true };
     }
-    
+
     // Move to next turn
     this.moveToNextTurn(room);
     
@@ -199,15 +229,23 @@ class GameStateManager {
   /**
    * Handle fold action
    */
-  handleFold(room, player) {
+  handleFold(roomCode, room, player) {
     player.hasFolded = true;
+    player.hasActed = true;
     
-    // Player loses the stake
-    const stakeLoss = Math.min(room.currentStake, player.points);
-    player.points -= stakeLoss;
-    room.pot += stakeLoss;
+    // Check if only one player remains active
+    const playersInRound = roomManager.getPlayersInRound(roomCode);
+    const activePlayers = playersInRound.filter(p => !p.hasFolded && !p.isAllIn);
     
-    return { stakeLoss };
+    // If only one player remains, they win immediately
+    if (activePlayers.length === 1) {
+      return { 
+        immediateWin: true,
+        winner: activePlayers[0]
+      };
+    }
+    
+    return { folded: true };
   }
 
   /**
@@ -224,6 +262,7 @@ class GameStateManager {
     player.points -= callAmount;
     player.currentBet += callAmount;
     room.pot += callAmount;
+    player.hasActed = true;
     
     return { betAmount: callAmount };
   }
@@ -273,6 +312,14 @@ class GameStateManager {
     player.currentBet = totalBet;
     room.highestBet = totalBet;
     room.pot += additionalAmount;
+    player.hasActed = true;
+    
+    // Reset hasActed for other players who now need to respond to the raise
+    room.players.forEach(p => {
+      if (p.id !== player.id && !p.hasFolded && !p.isAllIn && !p.isEliminated) {
+        p.hasActed = false;
+      }
+    });
     
     return { betAmount: totalBet };
   }
@@ -291,10 +338,17 @@ class GameStateManager {
     room.pot += allInAmount;
     player.points = 0;
     player.isAllIn = true;
+    player.hasActed = true;
     
     // Update highest bet if applicable
     if (player.currentBet > room.highestBet) {
       room.highestBet = player.currentBet;
+      // Reset hasActed for other players if this raises the bet
+      room.players.forEach(p => {
+        if (p.id !== player.id && !p.hasFolded && !p.isAllIn && !p.isEliminated) {
+          p.hasActed = false;
+        }
+      });
     }
     
     return { betAmount: allInAmount };
@@ -344,10 +398,11 @@ class GameStateManager {
       return { shouldEnd: true, reason: 'all_in' };
     }
     
-    // Check if all active players have matching bets
+    // Check if all active players have acted and matching bets
+    const allHaveActed = playersWhoCanAct.every(p => p.hasActed);
     const allBetsEqual = playersWhoCanAct.every(p => p.currentBet === room.highestBet);
     
-    if (allBetsEqual && room.highestBet > 0) {
+    if (allHaveActed && allBetsEqual && room.highestBet > 0) {
       return { shouldEnd: true, reason: 'betting_complete' };
     }
     
@@ -357,15 +412,20 @@ class GameStateManager {
   /**
    * End current round and determine winner(s)
    */
-  endRound(roomCode) {
+  endRound(roomCode, immediateWinner = null) {
     const room = roomManager.getRoom(roomCode);
     const playersInRound = roomManager.getPlayersInRound(roomCode);
     
     let winners = [];
     let winReason = '';
     
+    // Case 0: Immediate winner (all others folded)
+    if (immediateWinner) {
+      winners = [immediateWinner];
+      winReason = 'All others folded';
+    }
     // Case 1: Only one player left (others folded)
-    if (playersInRound.length === 1) {
+    else if (playersInRound.length === 1) {
       winners = [playersInRound[0]];
       winReason = 'All others folded';
     } else {
@@ -396,6 +456,15 @@ class GameStateManager {
       winner.points += winAmount;
     });
     
+    // Mark players with 0 or less points as eliminated
+    room.players.forEach(player => {
+      if (player.points <= 0 && !player.isEliminated) {
+        player.isEliminated = true;
+        player.isSpectator = true;
+        console.log(`[ELIMINATION] ${player.name} eliminated with ${player.points} points`);
+      }
+    });
+    
     // Prepare round end data
     const roundEndData = {
       roundNumber: room.roundNumber,
@@ -418,12 +487,16 @@ class GameStateManager {
     
     room.pot = 0;
     
-    // Check if game should end
+    // Check if game should end (recheck after elimination)
     const activePlayers = roomManager.getActivePlayers(roomCode);
     if (activePlayers.length <= 1) {
       room.gameEnded = true;
       roundEndData.gameEnded = true;
-      roundEndData.gameWinner = activePlayers[0] || null;
+      if (activePlayers.length === 1) {
+        roundEndData.gameWinner = activePlayers[0];
+      } else {
+        roundEndData.gameWinner = null; // No winners (shouldn't happen)
+      }
     }
     
     return roundEndData;
@@ -478,6 +551,7 @@ class GameStateManager {
       players: room.players.map(p => ({
         id: p.id,
         name: p.name,
+        socketId: p.socketId,
         points: p.points,
         currentBet: p.currentBet,
         hasFolded: p.hasFolded,
@@ -485,8 +559,9 @@ class GameStateManager {
         isEliminated: p.isEliminated,
         isSpectator: p.isSpectator,
         isHost: p.isHost,
-        // Hide cards from other players
-        hasCards: p.cards.length > 0
+        hasCards: p.cards.length > 0,
+        // Show cards if player has folded, otherwise hide
+        cards: p.hasFolded ? p.cards : undefined
       }))
     };
   }

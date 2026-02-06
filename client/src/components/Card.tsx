@@ -27,8 +27,8 @@ export const Card = ({ card }: CardProps) => {
   return (
     <div
       style={{
-        width: "80px",
-        height: "110px",
+        width: "clamp(60px, 10vw, 80px)",
+        height: "clamp(85px, 14vw, 110px)",
         border: "2px solid #34495e",
         borderRadius: "8px",
         backgroundColor: "#fff",
@@ -42,7 +42,7 @@ export const Card = ({ card }: CardProps) => {
     >
       <div
         style={{
-          fontSize: "32px",
+          fontSize: "clamp(24px, 5vw, 32px)",
           fontWeight: "bold",
           color: getSuitColor(card.suit),
         }}
@@ -51,7 +51,7 @@ export const Card = ({ card }: CardProps) => {
       </div>
       <div
         style={{
-          fontSize: "24px",
+          fontSize: "clamp(18px, 4vw, 24px)",
           color: getSuitColor(card.suit),
         }}
       >
@@ -59,7 +59,7 @@ export const Card = ({ card }: CardProps) => {
       </div>
       <div
         style={{
-          fontSize: "12px",
+          fontSize: "clamp(10px, 1.5vw, 12px)",
           color: "#7f8c8d",
           marginTop: "5px",
         }}
